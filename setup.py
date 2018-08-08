@@ -29,7 +29,7 @@ setup(
         "tabulate>=0.7.7",
         "tqdm>4.11.1",
         #"pyarrow>=0.9.0",
-        "pyzmq>=16",
+        #"pyzmq>=16",
         "subprocess32; python_version < '3.0'",
         "functools32; python_version < '3.0'",
     ],
