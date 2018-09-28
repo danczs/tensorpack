@@ -1,27 +1,102 @@
 #retinal net head
-def decode_bbox_target(box_predictions, anchors):
+# -*- coding: utf-8 -*-
+
+import tensorflow as tf
+
+
+from tensorpack.tfutils.summary import add_moving_summary
+from tensorpack.tfutils.argscope import argscope
+from tensorpack.tfutils.scope_utils import under_name_scope, auto_reuse_variable_scope
+from tensorpack.models import Conv2D, layer_register
+
+from model_box import clip_boxes
+from config import config as cfg
+
+
+@layer_register(log_shape=True)
+@auto_reuse_variable_scope
+def retinanet_head(featuremap, channel, num_anchors):
+    """
+    Returns:
+        label_logits: fHxfWxNA
+        box_logits: fHxfWxNAx4
+    """
+    with argscope(Conv2D, data_format='channels_first',
+                  kernel_initializer=tf.random_normal_initializer(stddev=0.01)):
+        hidden = Conv2D('conv0', featuremap, channel, 3, activation=tf.nn.relu)
+
+        label_logits = Conv2D('class', hidden, num_anchors, 1)
+        box_logits = Conv2D('box', hidden, 4 * num_anchors, 1)
+        # 1, NA(*4), im/16, im/16 (NCHW)
+
+        label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA
+        label_logits = tf.squeeze(label_logits, 0)  # fHxfWxNA
+
+        shp = tf.shape(box_logits)  # 1x(NAx4)xfHxfW
+        box_logits = tf.transpose(box_logits, [0, 2, 3, 1])  # 1xfHxfWx(NAx4)
+        box_logits = tf.reshape(box_logits, tf.stack([shp[2], shp[3], num_anchors, 4]))  # fHxfWxNAx4
+    return label_logits, box_logits
+
+
+@under_name_scope()
+def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     """
     Args:
-        box_predictions: (..., 4), logits
-        anchors: (..., 4), floatbox. Must have the same shape
-
+        anchor_labels: fHxfWxNA
+        anchor_boxes: fHxfWxNAx4, encoded
+        label_logits:  fHxfWxNA
+        box_logits: fHxfWxNAx4
     Returns:
-        box_decoded: (..., 4), float32. With the same shape.
+        label_loss, box_loss
     """
-    orig_shape = tf.shape(anchors)
-    box_pred_txtytwth = tf.reshape(box_predictions, (-1, 2, 2))
-    box_pred_txty, box_pred_twth = tf.split(box_pred_txtytwth, 2, axis=1)
-    # each is (...)x1x2
-    anchors_x1y1x2y2 = tf.reshape(anchors, (-1, 2, 2))
-    anchors_x1y1, anchors_x2y2 = tf.split(anchors_x1y1x2y2, 2, axis=1)
+    with tf.device('/cpu:0'):
+        valid_mask = tf.stop_gradient(tf.not_equal(anchor_labels, -1))
+        pos_mask = tf.stop_gradient(tf.equal(anchor_labels, 1))
+        nr_valid = tf.stop_gradient(tf.count_nonzero(valid_mask, dtype=tf.int32), name='num_valid_anchor')
+        nr_pos = tf.identity(tf.count_nonzero(pos_mask, dtype=tf.int32), name='num_pos_anchor')
+        # nr_pos is guaranteed >0 in C4. But in FPN. even nr_valid could be 0.
 
-    waha = anchors_x2y2 - anchors_x1y1
-    xaya = (anchors_x2y2 + anchors_x1y1) * 0.5
+        valid_anchor_labels = tf.boolean_mask(anchor_labels, valid_mask)
+    valid_label_logits = tf.boolean_mask(label_logits, valid_mask)
 
-    clip = np.log(config.PREPROC.MAX_SIZE / 16.)
-    wbhb = tf.exp(tf.minimum(box_pred_twth, clip)) * waha
-    xbyb = box_pred_txty * waha + xaya
-    x1y1 = xbyb - wbhb * 0.5
-    x2y2 = xbyb + wbhb * 0.5    # (...)x1x2
-    out = tf.concat([x1y1, x2y2], axis=-2)
-    return tf.reshape(out, orig_shape)
+    with tf.name_scope('label_metrics'):
+        valid_label_prob = tf.nn.sigmoid(valid_label_logits)
+        summaries = []
+        with tf.device('/cpu:0'):
+            for th in [0.5, 0.2, 0.1]:
+                valid_prediction = tf.cast(valid_label_prob > th, tf.int32)
+                nr_pos_prediction = tf.reduce_sum(valid_prediction, name='num_pos_prediction')
+                pos_prediction_corr = tf.count_nonzero(
+                    tf.logical_and(
+                        valid_label_prob > th,
+                        tf.equal(valid_prediction, valid_anchor_labels)),
+                    dtype=tf.int32)
+                placeholder = 0.5   # A small value will make summaries appear lower.
+                recall = tf.to_float(tf.truediv(pos_prediction_corr, nr_pos))
+                recall = tf.where(tf.equal(nr_pos, 0), placeholder, recall, name='recall_th{}'.format(th))
+                precision = tf.to_float(tf.truediv(pos_prediction_corr, nr_pos_prediction))
+                precision = tf.where(tf.equal(nr_pos_prediction, 0),
+                                     placeholder, precision, name='precision_th{}'.format(th))
+                summaries.extend([precision, recall])
+        add_moving_summary(*summaries)
+
+    # Per-level loss summaries in FPN may appear lower due to the use of a small placeholder.
+    # But the total RPN loss will be fine.  TODO make the summary op smarter
+    placeholder = 0.
+    label_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+        labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
+    label_loss = tf.reduce_sum(label_loss) * (1. / cfg.RPN.BATCH_PER_IM)
+    label_loss = tf.where(tf.equal(nr_valid, 0), placeholder, label_loss, name='label_loss')
+
+    pos_anchor_boxes = tf.boolean_mask(anchor_boxes, pos_mask)
+    pos_box_logits = tf.boolean_mask(box_logits, pos_mask)
+    delta = 1.0 / 9
+    box_loss = tf.losses.huber_loss(
+        pos_anchor_boxes, pos_box_logits, delta=delta,
+        reduction=tf.losses.Reduction.SUM) / delta
+    box_loss = box_loss * (1. / cfg.RPN.BATCH_PER_IM)
+    box_loss = tf.where(tf.equal(nr_pos, 0), placeholder, box_loss, name='box_loss')
+
+    add_moving_summary(label_loss, box_loss, nr_valid, nr_pos)
+    return label_loss, box_loss
+
