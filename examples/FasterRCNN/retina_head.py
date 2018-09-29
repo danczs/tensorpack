@@ -23,10 +23,17 @@ def retinanet_head(featuremap, channel, num_anchors):
     """
     with argscope(Conv2D, data_format='channels_first',
                   kernel_initializer=tf.random_normal_initializer(stddev=0.01)):
-        hidden = Conv2D('conv0', featuremap, channel, 3, activation=tf.nn.relu)
+        #hidden = Conv2D('conv0', featuremap, channel, 3, activation=tf.nn.relu)
 
-        label_logits = Conv2D('class', hidden, num_anchors, 1)
-        box_logits = Conv2D('box', hidden, 4 * num_anchors, 1)
+        conv_num = 4
+        cls_hidden = featuremap
+        box_hidden = featuremap
+        for i in range(conv_num):
+            cls_hidden = Conv2D('conv{}_cls_hidden'.formate(i), cls_hidden, channel, 3, activation=tf.nn.relu)
+            box_hidden = Conv2D('conv{}_cls_hidden'.formate(i), box_hidden, channel, 3, activation=tf.nn.relu)
+            
+        label_logits = Conv2D('class', cls_hidden, num_anchors, 1)
+        box_logits = Conv2D('box', box_hidden, 4 * num_anchors, 1)
         # 1, NA(*4), im/16, im/16 (NCHW)
 
         label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA
@@ -83,9 +90,19 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     # Per-level loss summaries in FPN may appear lower due to the use of a small placeholder.
     # But the total RPN loss will be fine.  TODO make the summary op smarter
     placeholder = 0.
-    label_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-        labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
-    label_loss = tf.reduce_sum(label_loss) * (1. / cfg.RPN.BATCH_PER_IM)
+    #label_loss = tf.nn.sigmoid_cross_entropy_with_logits(
+    #    labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
+    
+    #focal loss
+    label_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
+    weigths = tf.stop_gradient(tf.nn.softmax(valid_label_logits))
+    #gamma = tf.constant(2.0)
+    alpha = tf.constant(0.25)
+    weights = (tf.constant(1.0) - weights) * (tf.constant(1.0) - weights) * alpha
+    lable_loss = weights * label_loss
+    ##########
+    
+    label_loss = tf.reduce_sum(label_loss) * (1. / cfg.RPN.BATCH_PER_IM)    
     label_loss = tf.where(tf.equal(nr_valid, 0), placeholder, label_loss, name='label_loss')
 
     pos_anchor_boxes = tf.boolean_mask(anchor_boxes, pos_mask)
