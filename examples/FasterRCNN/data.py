@@ -116,7 +116,7 @@ def get_all_anchors_fpn(strides=None, sizes=None):
     return foas
 
 
-def get_anchor_labels(anchors, gt_boxes, crowd_boxes):
+def get_anchor_labels(anchors, gt_boxes, crowd_boxes,klass):
     """
     Label each anchor as fg/bg/ignore.
     Args:
@@ -188,7 +188,7 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes):
     return anchor_labels, anchor_boxes
 
 
-def get_rpn_anchor_input(im, boxes, is_crowd):
+def get_rpn_anchor_input(im, boxes, is_crowd, klass):
     """
     Args:
         im: an image
@@ -209,7 +209,7 @@ def get_rpn_anchor_input(im, boxes, is_crowd):
     # only use anchors inside the image
     inside_ind, inside_anchors = filter_boxes_inside_shape(featuremap_anchors_flatten, im.shape[:2])
     # obtain anchor labels and their corresponding gt boxes
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1], klass[is_crowd == 0])
 
     # Fill them back to original size: fHxfWx1, fHxfWx4
     anchorH, anchorW = all_anchors.shape[:2]
@@ -337,7 +337,7 @@ def get_train_dataflow():
         # rpn anchor:
         try:
             if cfg.MODE_FPN:
-                multilevel_anchor_inputs = get_multilevel_rpn_anchor_input(im, boxes, is_crowd)
+                multilevel_anchor_inputs = get_multilevel_rpn_anchor_input(im, boxes, is_crowd, klass)
                 anchor_inputs = itertools.chain.from_iterable(multilevel_anchor_inputs)
             else:
                 # anchor_labels, anchor_boxes
