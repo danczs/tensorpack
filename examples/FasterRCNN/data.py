@@ -131,6 +131,9 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes,klass):
     # This function will modify labels and return the filtered inds
     def filter_box_label(labels, value, max_num):
         curr_inds = np.where(labels == value)[0]
+        if cfg.MODE_RETINANET and value==1:
+            curr_inds = np.where(labels >= value)[0]
+            
         if len(curr_inds) > max_num:
             disable_inds = np.random.choice(
                 curr_inds, size=(len(curr_inds) - max_num),
@@ -150,10 +153,14 @@ def get_anchor_labels(anchors, gt_boxes, crowd_boxes,klass):
 
     # Setting NA labels: 1--fg 0--bg -1--ignore
     anchor_labels = -np.ones((NA,), dtype='int32')   # NA,
-
-    # the order of setting neg/pos labels matter
-    anchor_labels[anchors_with_max_iou_per_gt] = 1
-    anchor_labels[ious_max_per_anchor >= cfg.RPN.POSITIVE_ANCHOR_THRESH] = 1
+    
+    if cfg.MODE_RETINANET:
+        anchor_labels[anchors_with_max_iou_per_gt] = klass
+        anchor_labels[ious_max_per_anchor >= cfg.RPN.POSITIVE_ANCHOR_THRESH] = klass[ious_argmax_per_anchor]
+    else:
+        # the order of setting neg/pos labels matter
+        anchor_labels[anchors_with_max_iou_per_gt] = 1
+        anchor_labels[ious_max_per_anchor >= cfg.RPN.POSITIVE_ANCHOR_THRESH] = 1
     anchor_labels[ious_max_per_anchor < cfg.RPN.NEGATIVE_ANCHOR_THRESH] = 0
 
     # We can label all non-ignore candidate boxes which overlap crowd as ignore
