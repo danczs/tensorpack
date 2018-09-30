@@ -229,7 +229,7 @@ def get_rpn_anchor_input(im, boxes, is_crowd, klass):
     return featuremap_labels, featuremap_boxes
 
 
-def get_multilevel_rpn_anchor_input(im, boxes, is_crowd):
+def get_multilevel_rpn_anchor_input(im, boxes, is_crowd, klass):
     """
     Args:
         im: an image
@@ -249,7 +249,7 @@ def get_multilevel_rpn_anchor_input(im, boxes, is_crowd):
     all_anchors_flatten = np.concatenate(flatten_anchors_per_level, axis=0)
 
     inside_ind, inside_anchors = filter_boxes_inside_shape(all_anchors_flatten, im.shape[:2])
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1], klass[is_crowd == 0])
 
     # map back to all_anchors, then split to each level
     num_all_anchors = all_anchors_flatten.shape[0]
@@ -348,7 +348,7 @@ def get_train_dataflow():
                 anchor_inputs = itertools.chain.from_iterable(multilevel_anchor_inputs)
             else:
                 # anchor_labels, anchor_boxes
-                anchor_inputs = get_rpn_anchor_input(im, boxes, is_crowd)
+                anchor_inputs = get_rpn_anchor_input(im, boxes, is_crowd, klass)
                 assert len(anchor_inputs) == 2
 
             boxes = boxes[is_crowd == 0]    # skip crowd boxes in training target
