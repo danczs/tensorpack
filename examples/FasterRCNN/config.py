@@ -75,7 +75,7 @@ _C = config     # short alias to avoid coding
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
 _C.MODE_MASK = True        # FasterRCNN or MaskRCNN
 _C.MODE_FPN = False
-
+_C.MODE_RETINANET = False
 # dataset -----------------------
 _C.DATA.BASEDIR = '/path/to/your/COCO/DIR'
 _C.DATA.TRAIN = ['train2014', 'valminusminival2014']   # i.e., trainval35k
