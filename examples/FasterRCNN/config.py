@@ -115,6 +115,10 @@ _C.PREPROC.MAX_SIZE = 1024
 _C.PREPROC.PIXEL_MEAN = [123.675, 116.28, 103.53]
 _C.PREPROC.PIXEL_STD = [58.395, 57.12, 57.375]
 
+#retinanet
+_C.RETINANET.MIN_SIZE = 0
+_C.RETINANET.PROPOSAL_NMS_THRESH = 0.5
+
 # anchors -------------------------
 _C.RPN.ANCHOR_STRIDE = 16
 _C.RPN.ANCHOR_SIZES = (32, 64, 128, 256)#, 512)   # sqrtarea of the anchor box
