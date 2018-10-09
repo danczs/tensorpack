@@ -118,7 +118,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     return label_loss, box_loss
 
 @under_name_scope()
-def generate_retinanet_box(boxes, scores, img_shape,
+def generate_retinanet_boxes(boxes, scores, img_shape,
                            pre_nms_topk, post_nms_topk=None):
     """
     Sample RPN proposals by the following steps:
