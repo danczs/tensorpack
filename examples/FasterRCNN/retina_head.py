@@ -159,7 +159,7 @@ def generate_retinanet_box(boxes, scores, img_shape,
         topk_valid_boxes_y1x1y2x2,
         topk_valid_scores,
         max_output_size=post_nms_topk,
-        iou_threshold=cfg.RPN.PROPOSAL_NMS_THRESH)
+        iou_threshold=cfg.RETINANET.PROPOSAL_NMS_THRESH)
 
     topk_valid_boxes = tf.reshape(topk_valid_boxes_x1y1x2y2, (-1, 4))
     proposal_boxes = tf.gather(topk_valid_boxes, nms_indices)
