@@ -145,6 +145,125 @@ class DetectionModel(ModelDesc):
         return ['image'], out
 
 
+class ResNetC4Model_RetinaNet(DetectionModel):
+    def inputs(self):
+        ret = [
+            tf.placeholder(tf.float32, (None, None, 3), 'image'),
+            tf.placeholder(tf.int32, (None, None, cfg.RPN.NUM_ANCHOR), 'anchor_labels'),
+            tf.placeholder(tf.float32, (None, None, cfg.RPN.NUM_ANCHOR, 4), 'anchor_boxes'),
+            tf.placeholder(tf.float32, (None, 4), 'gt_boxes'),
+            tf.placeholder(tf.int64, (None,), 'gt_labels')]  # all > 0
+        if cfg.MODE_MASK:
+            ret.append(
+                tf.placeholder(tf.uint8, (None, None, None), 'gt_masks')
+            )   # NR_GT x height x width
+        return ret
+
+    def build_graph(self, *inputs):
+        is_training = get_current_tower_context().is_training
+        if cfg.MODE_MASK:
+            image, anchor_labels, anchor_boxes, gt_boxes, gt_labels, gt_masks = inputs
+        else:
+            image, anchor_labels, anchor_boxes, gt_boxes, gt_labels = inputs
+        image = self.preprocess(image)     # 1CHW
+
+        featuremap = resnet_c4_backbone(image, cfg.BACKBONE.RESNET_NUM_BLOCK[:3])
+        retinanet_label_logits, retinanet_box_logits = retinanet_head('retinanet', featuremap, cfg.RPN.HEAD_DIM, cfg.RPN.NUM_ANCHOR)
+        #******
+        anchors = RPNAnchors(get_all_anchors(), anchor_labels, anchor_boxes)
+        anchors = anchors.narrow_to(featuremap)
+
+        image_shape2d = tf.shape(image)[2:]     # h,w
+        
+
+        #if is_training:
+        #    # sample proposal boxes in training
+        #    rcnn_boxes, rcnn_labels, fg_inds_wrt_gt = sample_fast_rcnn_targets(
+        #        proposal_boxes, gt_boxes, gt_labels)
+        #else:
+        #    # The boxes to be used to crop RoIs.
+        #    # Use all proposal boxes in inference
+         #   rcnn_boxes = proposal_boxes
+
+        #boxes_on_featuremap = rcnn_boxes * (1.0 / cfg.RPN.ANCHOR_STRIDE)
+        #roi_resized = roi_align(featuremap, boxes_on_featuremap, 14)
+
+        #feature_fastrcnn = resnet_conv5(roi_resized, cfg.BACKBONE.RESNET_NUM_BLOCK[-1])    # nxcx7x7
+        # Keep C5 feature to be shared with mask branch
+        #feature_gap = GlobalAvgPooling('gap', feature_fastrcnn, data_format='channels_first')
+        #fastrcnn_label_logits, fastrcnn_box_logits = fastrcnn_outputs('fastrcnn', feature_gap, cfg.DATA.NUM_CLASS)
+
+        if is_training:
+            # rpn loss
+            retinanet_label_loss, retinanet_box_loss = retinanet_losses(
+                anchors.gt_labels, anchors.encoded_gt_boxes(), retinanet_label_logits, retinanet_box_logits)
+
+            # fastrcnn loss
+            #matched_gt_boxes = tf.gather(gt_boxes, fg_inds_wrt_gt)
+
+            #fg_inds_wrt_sample = tf.reshape(tf.where(rcnn_labels > 0), [-1])   # fg inds w.r.t all samples
+            #fg_sampled_boxes = tf.gather(rcnn_boxes, fg_inds_wrt_sample)
+            #fg_fastrcnn_box_logits = tf.gather(fastrcnn_box_logits, fg_inds_wrt_sample)
+
+            #fastrcnn_label_loss, fastrcnn_box_loss = self.fastrcnn_training(
+            #    image, rcnn_labels, fg_sampled_boxes,
+            #    matched_gt_boxes, fastrcnn_label_logits, fg_fastrcnn_box_logits)
+            '''
+            if cfg.MODE_MASK:
+                # maskrcnn loss
+                fg_labels = tf.gather(rcnn_labels, fg_inds_wrt_sample)
+                # In training, mask branch shares the same C5 feature.
+                fg_feature = tf.gather(feature_fastrcnn, fg_inds_wrt_sample)
+                mask_logits = maskrcnn_upXconv_head(
+                    'maskrcnn', fg_feature, cfg.DATA.NUM_CATEGORY, num_convs=0)   # #fg x #cat x 14x14
+
+                target_masks_for_fg = crop_and_resize(
+                    tf.expand_dims(gt_masks, 1),
+                    fg_sampled_boxes,
+                    fg_inds_wrt_gt, 14,
+                    pad_border=False)  # nfg x 1x14x14
+                target_masks_for_fg = tf.squeeze(target_masks_for_fg, 1, 'sampled_fg_mask_targets')
+                mrcnn_loss = maskrcnn_loss(mask_logits, fg_labels, target_masks_for_fg)
+            else:
+                mrcnn_loss = 0.0
+            '''
+            mrcnn_loss = 0.0
+            
+            wd_cost = regularize_cost(
+                '.*/W', l2_regularizer(cfg.TRAIN.WEIGHT_DECAY), name='wd_cost')
+
+            #total_cost = tf.add_n([
+            #    rpn_label_loss, rpn_box_loss,
+            #    fastrcnn_label_loss, fastrcnn_box_loss,
+            #    mrcnn_loss, wd_cost], 'total_cost')
+            total_cost = tf.add_n([
+                retinanet_label_loss, retinanet_box_loss,
+                mrcnn_loss, wd_cost], 'total_cost')
+            
+            add_moving_summary(total_cost, wd_cost)
+            return total_cost
+        else:
+            #final_boxes, final_labels = self.fastrcnn_inference(
+            #    image_shape2d, rcnn_boxes, fastrcnn_label_logits, fastrcnn_box_logits)
+            '''
+            if cfg.MODE_MASK:
+                roi_resized = roi_align(featuremap, final_boxes * (1.0 / cfg.RPN.ANCHOR_STRIDE), 14)
+                feature_maskrcnn = resnet_conv5(roi_resized, cfg.BACKBONE.RESNET_NUM_BLOCK[-1])
+                mask_logits = maskrcnn_upXconv_head(
+                    'maskrcnn', feature_maskrcnn, cfg.DATA.NUM_CATEGORY, 0)   # #result x #cat x 14x14
+                indices = tf.stack([tf.range(tf.size(final_labels)), tf.to_int32(final_labels) - 1], axis=1)
+                final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
+                tf.sigmoid(final_mask_logits, name='final_masks')
+            '''
+            pred_boxes_decoded = anchors.decode_logits(retinanet_box_logits)  # fHxfWxNAx4, floatbox
+            final_boxes, final_labels = generate_retinanet_proposals(
+                tf.reshape(pred_boxes_decoded, [-1, 4]),
+                tf.reshape(retinanet_label_logits, [-1]),
+                image_shape2d,
+                cfg.RPN.TRAIN_PRE_NMS_TOPK if is_training else cfg.RPN.TEST_PRE_NMS_TOPK,
+                cfg.RPN.TRAIN_POST_NMS_TOPK if is_training else cfg.RPN.TEST_POST_NMS_TOPK)
+        
+        
 class ResNetC4Model(DetectionModel):
     def inputs(self):
         ret = [
@@ -255,8 +374,9 @@ class ResNetC4Model(DetectionModel):
                 indices = tf.stack([tf.range(tf.size(final_labels)), tf.to_int32(final_labels) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='final_masks')
-
-
+                
+                
+                
 class ResNetFPNModel(DetectionModel):
 
     def inputs(self):
