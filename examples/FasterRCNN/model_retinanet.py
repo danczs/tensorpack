@@ -30,7 +30,7 @@ def retinanet_head(featuremap, channel, num_anchors):
         box_hidden = featuremap
         for i in range(conv_num):
             cls_hidden = Conv2D('conv{}_cls_hidden'.format(i), cls_hidden, channel, 3, activation=tf.nn.relu)
-            box_hidden = Conv2D('conv{}_cls_hidden'.format(i), box_hidden, channel, 3, activation=tf.nn.relu)
+            box_hidden = Conv2D('conv{}_box_hidden'.format(i), box_hidden, channel, 3, activation=tf.nn.relu)
             
         label_logits = Conv2D('class', cls_hidden, num_anchors*cfg.DATA.NUM_CATEGORY, 1)
         box_logits = Conv2D('box', box_hidden, 4 * num_anchors, 1)
@@ -70,7 +70,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     valid_label_logits = tf.boolean_mask(label_logits, valid_mask)
 
     with tf.name_scope('label_metrics'):
-        valid_label_prob = tf.constant(1.0) - tf.nn.softmax(valid_label_logits)[:,:,:0]
+        valid_label_prob = tf.constant(1.0) - tf.nn.softmax(valid_label_logits)[:,:,:,0]
         summaries = []
         with tf.device('/cpu:0'):
             for th in [0.5, 0.2, 0.1]:
