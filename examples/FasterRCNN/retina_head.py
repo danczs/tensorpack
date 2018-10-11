@@ -32,16 +32,17 @@ def retinanet_head(featuremap, channel, num_anchors):
             cls_hidden = Conv2D('conv{}_cls_hidden'.formate(i), cls_hidden, channel, 3, activation=tf.nn.relu)
             box_hidden = Conv2D('conv{}_cls_hidden'.formate(i), box_hidden, channel, 3, activation=tf.nn.relu)
             
-        label_logits = Conv2D('class', cls_hidden, num_anchors, 1)
+        label_logits = Conv2D('class', cls_hidden, num_anchors*cfg.DATA.NUM_CATEGORY, 1)
         box_logits = Conv2D('box', box_hidden, 4 * num_anchors, 1)
         # 1, NA(*4), im/16, im/16 (NCHW)
 
-        label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA
+        label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA    1xfhxfwxna*cat
         label_logits = tf.squeeze(label_logits, 0)  # fHxfWxNA
-
+        
         shp = tf.shape(box_logits)  # 1x(NAx4)xfHxfW
         box_logits = tf.transpose(box_logits, [0, 2, 3, 1])  # 1xfHxfWx(NAx4)
         box_logits = tf.reshape(box_logits, tf.stack([shp[2], shp[3], num_anchors, 4]))  # fHxfWxNAx4
+        label_logits = tf.reshape(label_logits,tf.stack([shp[2],shp[3],num_anchors,cfg.DATA.NUM_CATEGORY])) #fhxfwxnaxcat
     return label_logits, box_logits
 
 
@@ -51,7 +52,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     Args:
         anchor_labels: fHxfWxNA
         anchor_boxes: fHxfWxNAx4, encoded
-        label_logits:  fHxfWxNA
+        label_logits:  fHxfWxNA    fhxfwxna*cat
         box_logits: fHxfWxNAx4
     Returns:
         label_loss, box_loss
@@ -67,7 +68,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     valid_label_logits = tf.boolean_mask(label_logits, valid_mask)
 
     with tf.name_scope('label_metrics'):
-        valid_label_prob = tf.nn.sigmoid(valid_label_logits)
+        valid_label_prob = tf.constant(1.0) - tf.nn.softmax(valid_label_logits)[:,:,:0]
         summaries = []
         with tf.device('/cpu:0'):
             for th in [0.5, 0.2, 0.1]:
