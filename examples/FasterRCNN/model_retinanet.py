@@ -70,7 +70,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     valid_label_logits = tf.boolean_mask(label_logits, valid_mask)
 
     with tf.name_scope('label_metrics'):
-        valid_label_prob = tf.constant(1.0) - tf.nn.softmax(valid_label_logits)[:,:,:,0]
+        valid_label_prob = tf.constant(1.0) - tf.nn.softmax(valid_label_logits)[:,0]
         summaries = []
         with tf.device('/cpu:0'):
             for th in [0.5, 0.2, 0.1]:
@@ -97,7 +97,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     #    labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
     
     #focal loss
-    label_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.to_float(valid_anchor_labels), logits=valid_label_logits)
+    label_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=valid_anchor_labels, logits=valid_label_logits)
     weigths = tf.stop_gradient(tf.nn.softmax(valid_label_logits))
     #gamma = tf.constant(2.0)
     alpha = tf.constant(0.25)
