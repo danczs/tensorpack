@@ -256,7 +256,7 @@ class ResNetC4Model_RetinaNet(DetectionModel):
                 tf.sigmoid(final_mask_logits, name='final_masks')
             '''
             pred_boxes_decoded = anchors.decode_logits(retinanet_box_logits)  # fHxfWxNAx4, floatbox
-            final_boxes, final_labels = generate_retinanet_boxes(
+            boxes_decoded, scores = generate_retinanet_boxes(
                 tf.reshape(pred_boxes_decoded, [-1, 4]),
                 tf.reshape(retinanet_label_logits, [-1]),
                 image_shape2d,
