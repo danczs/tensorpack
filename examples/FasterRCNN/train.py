@@ -256,13 +256,18 @@ class ResNetC4Model_RetinaNet(DetectionModel):
                 tf.sigmoid(final_mask_logits, name='final_masks')
             '''
             pred_boxes_decoded = anchors.decode_logits(retinanet_box_logits)  # fHxfWxNAx4, floatbox
-            boxes_decoded, scores = generate_retinanet_boxes(
+            decoded_boxes, label_probs = generate_retinanet_boxes(
                 tf.reshape(pred_boxes_decoded, [-1, 4]),
-                tf.reshape(retinanet_label_logits, [-1]),
+                tf.reshape(retinanet_label_logits, [-1,cfg.DATA.NUM_CATEGORY]),
                 image_shape2d,
                 cfg.RPN.TRAIN_PRE_NMS_TOPK if is_training else cfg.RPN.TEST_PRE_NMS_TOPK,
                 cfg.RPN.TRAIN_POST_NMS_TOPK if is_training else cfg.RPN.TEST_POST_NMS_TOPK)
-        
+           
+            pred_indices, final_probs = fastrcnn_predictions(decoded_boxes, label_probs)
+            final_probs = tf.identity(final_probs, 'final_probs')
+            final_boxes = tf.gather_nd(decoded_boxes, pred_indices, name='final_boxes')
+            final_labels = tf.add(pred_indices[:, 1], 1, name='final_labels')
+           
         
 class ResNetC4Model(DetectionModel):
     def inputs(self):
