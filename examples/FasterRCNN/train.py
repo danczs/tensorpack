@@ -258,11 +258,13 @@ class ResNetC4Model_RetinaNet(DetectionModel):
             pred_boxes_decoded = anchors.decode_logits(retinanet_box_logits)  # fHxfWxNAx4, floatbox
             decoded_boxes, label_probs = generate_retinanet_boxes(
                 tf.reshape(pred_boxes_decoded, [-1, 4]),
-                tf.reshape(retinanet_label_logits, [-1,cfg.DATA.NUM_CATEGORY]),
+                tf.reshape(retinanet_label_logits, [-1,cfg.DATA.NUM_CLASS),
                 image_shape2d,
                 cfg.RPN.TRAIN_PRE_NMS_TOPK if is_training else cfg.RPN.TEST_PRE_NMS_TOPK,
                 cfg.RPN.TRAIN_POST_NMS_TOPK if is_training else cfg.RPN.TEST_POST_NMS_TOPK)
-           
+            
+            decoded_boxes = tf.expand_dims(decoded_boxes,1)
+            decoded_boxes = tf.tile(decoded_boxes,[1,cfg.DATA.NUM_CATEGORY,1])
             pred_indices, final_probs = fastrcnn_predictions(decoded_boxes, label_probs)
             final_probs = tf.identity(final_probs, 'final_probs')
             final_boxes = tf.gather_nd(decoded_boxes, pred_indices, name='final_boxes')
