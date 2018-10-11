@@ -708,8 +708,11 @@ if __name__ == '__main__':
     if args.config:
         cfg.update_args(args.config)
 
-    MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
-
+    
+    if cfg.MODE_RETINANET:
+        MODEL =  ResNetC4Model_RetinaNet()
+    else:
+        MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
     if args.visualize or args.evaluate or args.predict or args.predict_cropimage:
         assert args.load
         finalize_configs(is_training=False)
