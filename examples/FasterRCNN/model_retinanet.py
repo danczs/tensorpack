@@ -98,7 +98,7 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     
     #focal loss
     label_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=valid_anchor_labels, logits=valid_label_logits)
-    weigths = tf.stop_gradient(tf.nn.softmax(valid_label_logits))
+    weights = tf.stop_gradient(tf.nn.softmax(valid_label_logits))
     #gamma = tf.constant(2.0)
     alpha = tf.constant(0.25)
     weights = (tf.constant(1.0) - weights) * (tf.constant(1.0) - weights) * alpha
