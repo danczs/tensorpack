@@ -59,7 +59,9 @@ def retinanet_losses(anchor_labels, anchor_boxes, label_logits, box_logits):
     """
     with tf.device('/cpu:0'):
         valid_mask = tf.stop_gradient(tf.not_equal(anchor_labels, -1))
-        pos_mask = tf.stop_gradient(tf.equal(anchor_labels, 1))
+        #pos_mask = tf.stop_gradient(tf.equal(anchor_labels, 1))
+        
+        pos_mask = tf.stop_gradient(tf.greater_equal(anchor_labels, 1))
         nr_valid = tf.stop_gradient(tf.count_nonzero(valid_mask, dtype=tf.int32), name='num_valid_anchor')
         nr_pos = tf.identity(tf.count_nonzero(pos_mask, dtype=tf.int32), name='num_pos_anchor')
         # nr_pos is guaranteed >0 in C4. But in FPN. even nr_valid could be 0.
