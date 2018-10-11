@@ -29,8 +29,8 @@ def retinanet_head(featuremap, channel, num_anchors):
         cls_hidden = featuremap
         box_hidden = featuremap
         for i in range(conv_num):
-            cls_hidden = Conv2D('conv{}_cls_hidden'.formate(i), cls_hidden, channel, 3, activation=tf.nn.relu)
-            box_hidden = Conv2D('conv{}_cls_hidden'.formate(i), box_hidden, channel, 3, activation=tf.nn.relu)
+            cls_hidden = Conv2D('conv{}_cls_hidden'.format(i), cls_hidden, channel, 3, activation=tf.nn.relu)
+            box_hidden = Conv2D('conv{}_cls_hidden'.format(i), box_hidden, channel, 3, activation=tf.nn.relu)
             
         label_logits = Conv2D('class', cls_hidden, num_anchors*cfg.DATA.NUM_CATEGORY, 1)
         box_logits = Conv2D('box', box_hidden, 4 * num_anchors, 1)
