@@ -32,17 +32,17 @@ def retinanet_head(featuremap, channel, num_anchors):
             cls_hidden = Conv2D('conv{}_cls_hidden'.format(i), cls_hidden, channel, 3, activation=tf.nn.relu)
             box_hidden = Conv2D('conv{}_box_hidden'.format(i), box_hidden, channel, 3, activation=tf.nn.relu)
             
-        label_logits = Conv2D('class', cls_hidden, num_anchors*cfg.DATA.NUM_CATEGORY, 1)
+        label_logits = Conv2D('class', cls_hidden, num_anchors*cfg.DATA.NUM_CLASS, 1)
         box_logits = Conv2D('box', box_hidden, 4 * num_anchors, 1)
         # 1, NA(*4), im/16, im/16 (NCHW)
 
-        label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA    1xfhxfwxna*cat
+        label_logits = tf.transpose(label_logits, [0, 2, 3, 1])  # 1xfHxfWxNA    1xfhxfwxna*class
         label_logits = tf.squeeze(label_logits, 0)  # fHxfWxNA
         
         shp = tf.shape(box_logits)  # 1x(NAx4)xfHxfW
         box_logits = tf.transpose(box_logits, [0, 2, 3, 1])  # 1xfHxfWx(NAx4)
         box_logits = tf.reshape(box_logits, tf.stack([shp[2], shp[3], num_anchors, 4]))  # fHxfWxNAx4
-        label_logits = tf.reshape(label_logits,tf.stack([shp[2],shp[3],num_anchors,cfg.DATA.NUM_CATEGORY])) #fhxfwxnaxcat
+        label_logits = tf.reshape(label_logits,tf.stack([shp[2],shp[3],num_anchors,cfg.DATA.NUM_CLASS])) #fhxfwxnaxclass
     return label_logits, box_logits
 
 
