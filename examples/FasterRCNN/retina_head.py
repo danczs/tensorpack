@@ -130,21 +130,24 @@ def generate_retinanet_boxes(boxes, scores, img_shape,
     3. Pick top k2 by scores. Default k2 == k1, i.e. does not filter the NMS output.
     Args:
         boxes: nx4 float dtype, the proposal boxes. Decoded to floatbox already
-        scores: n float, the logits
+        scores: n float, the logits  nxclass
         img_shape: [h, w]
         pre_nms_topk, post_nms_topk (int): See above.
     Returns:
         boxes: kx4 float
-        scores: k logits
+        scores: k logits     
     """
     assert boxes.shape.ndims == 2, boxes.shape
     if post_nms_topk is None:
         post_nms_topk = pre_nms_topk
-    
+    realscores = scores
     scores = tf.constant(1.0) - scores[0]
+    
+    
     topk = tf.minimum(pre_nms_topk, tf.size(scores))
     topk_scores, topk_indices = tf.nn.top_k(scores, k=topk, sorted=False)
     topk_boxes = tf.gather(boxes, topk_indices)
+    topk_scores = tf.gather(realscores, topk_indices)
     
     
     
