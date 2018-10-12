@@ -140,8 +140,9 @@ def generate_retinanet_boxes(boxes, scores, img_shape,
     assert boxes.shape.ndims == 2, boxes.shape
     if post_nms_topk is None:
         post_nms_topk = pre_nms_topk
+    scores = tf.nn.softmax(scores)
     realscores = scores
-    scores = tf.constant(1.0) - scores[0]
+    scores = tf.constant(1.0) - scores[:,0]
     
     
     topk = tf.minimum(pre_nms_topk, tf.size(scores))
