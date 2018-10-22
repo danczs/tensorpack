@@ -25,6 +25,70 @@ CFG = {
     101: ([3, 4, 23, 3]),
     152: ([3, 8, 36, 3])
 }
+import numpy as np
+import tensorflow as tf
+
+def randomscale(x,dim = 2,rate=tf.constant(0.1)):
+    scale_value = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=-1,maxval=1)
+    scale_value = scale_value * rate + tf.constant(1.0)
+
+    #shink = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.constant(1.0)/expand
+    #mask = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=0,maxval=1, dtype=tf.int32)
+    #mask = tf.cast(mask,tf.float32)
+    #scale_value = shink*mask + expand*(tf.constant(1.0)-mask)
+    for i in range(4-dim):
+	scale_value = tf.expand_dims(scale_value,i+dim)
+    #scale_value = tf.expand_dims(tf.expand_dims(scale_value,2),3)
+    #scale_value = tf.Print(scale_value,['scale_value',tf.shape(scale_value)])
+    
+    return tf.multiply(x,scale_value)
+
+def samplewise_dropout(x,keep_prob):
+    scale_value = tf.random_uniform(shape=tf.shape(x),minval=-1,maxval=0)
+    dim = 1
+    for i in range(4-dim):
+	keep_prob = tf.expand_dims(keep_prob,i+dim)
+    scale_value = scale_value + keep_prob
+    scale_value = (tf.sign(scale_value) + tf.constant(1.0))/tf.constant(2.0)
+
+    #shink = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.constant(1.0)/expand
+    #mask = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=0,maxval=1, dtype=tf.int32)
+    #mask = tf.cast(mask,tf.float32)
+    #scale_value = shink*mask + expand*(tf.constant(1.0)-mask)
+    #dim = 1
+    #for i in range(4-dim):
+	#scale_value = tf.expand_dims(scale_value,i+dim)
+    #scale_value = tf.expand_dims(tf.expand_dims(scale_value,2),3)
+    #scale_value = tf.Print(scale_value,['scale_value',tf.shape(scale_value)])
+    
+    return tf.multiply(x,scale_value) / keep_prob  #update 2018.3.10
+
+
+def channel_dropout(x,shape,keep_rate=1.0,dim = 4):
+    scale_value = tf.random_uniform(shape=shape,minval=-1,maxval=0)
+    
+    for i in range(2):
+	scale_value = tf.expand_dims(scale_value,i+2)
+    scale_value = scale_value + tf.constant(keep_rate)
+    scale_value = (tf.sign(scale_value) + tf.constant(1.0))/tf.constant(2.0)
+
+    #shink = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=1-rate,maxval=1)
+    #expand = tf.constant(1.0)/expand
+    #mask = tf.random_uniform(shape=tf.shape(x)[0:dim],minval=0,maxval=1, dtype=tf.int32)
+    #mask = tf.cast(mask,tf.float32)
+    #scale_value = shink*mask + expand*(tf.constant(1.0)-mask)
+    #dim = 1
+    #for i in range(4-dim):
+	#scale_value = tf.expand_dims(scale_value,i+dim)
+    #scale_value = tf.expand_dims(tf.expand_dims(scale_value,2),3)
+    #scale_value = tf.Print(scale_value,['scale_value',tf.shape(scale_value)])
+    
+    return tf.multiply(x,scale_value) / tf.constant(keep_rate)
 
 
 class Model(ModelDesc):
